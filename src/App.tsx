@@ -159,7 +159,7 @@ function AppContent() {
 
       {/* Main Content Area */}
       <div 
-        className="flex-1 flex flex-col min-h-screen transition-all duration-200"
+        className="flex-1 flex flex-col min-h-screen transition-all duration-200 min-w-0 overflow-x-hidden"
         style={{ paddingLeft: isMobile ? '0px' : (isSidebarCollapsed ? '60px' : '220px') }}
       >
         {/* Fixed Top Header bar */}
