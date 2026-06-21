@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../shared/Toast';
-import { ShieldCheck, User as UserIcon, Lock } from 'lucide-react';
+import { useSync } from '../../context/SyncContext';
+import { ShieldCheck, User as UserIcon, Lock, Cloud, Eye, EyeOff, RefreshCw } from 'lucide-react';
 
 interface LoginProps {
   onNavigateToRegister: () => void;
@@ -10,11 +11,38 @@ interface LoginProps {
 export const Login: React.FC<LoginProps> = ({ onNavigateToRegister }) => {
   const { login } = useAuth();
   const { showToast } = useToast();
+  const { isSyncEnabled, enableSync } = useSync();
   
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Cloud Link states
+  const [showCloudLink, setShowCloudLink] = useState(false);
+  const [cloudToken, setCloudToken] = useState('');
+  const [cloudRepo, setCloudRepo] = useState('');
+  const [showToken, setShowToken] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+
+  const handleConnectCloud = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cloudToken.trim() || !cloudRepo.trim()) {
+      showToast('Please enter both cloud configurations.', 'error');
+      return;
+    }
+
+    setConnecting(true);
+    const res = await enableSync(cloudToken, cloudRepo);
+    setConnecting(false);
+
+    if (res.success) {
+      showToast('GitHub database linked successfully! You can now sign in.');
+      setShowCloudLink(false);
+    } else {
+      showToast(res.error || 'Failed to verify cloud credentials.', 'error');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,6 +150,96 @@ export const Login: React.FC<LoginProps> = ({ onNavigateToRegister }) => {
             </button>
           </p>
         </div>
+
+        {/* Cloud Link toggle */}
+        <div className="w-full mt-4 flex justify-center border-t border-border/40 pt-4">
+          <button
+            onClick={() => setShowCloudLink(!showCloudLink)}
+            className="text-[12px] text-muted hover:text-primary transition-colors flex items-center gap-1.5 cursor-pointer bg-transparent border-0 outline-none font-medium"
+          >
+            <Cloud className="w-3.5 h-3.5" />
+            {isSyncEnabled ? 'Cloud Sync Status' : 'Link GitHub Cloud Database'}
+          </button>
+        </div>
+
+        {/* Collapsible Cloud Link Form */}
+        {showCloudLink && (
+          <div className="w-full mt-4 p-4 border border-border bg-[#0A0A0F]/60 rounded-md text-left animate-in slide-in-from-top duration-200">
+            <h4 className="text-[11px] font-bold text-cream uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <Cloud className="w-3.5 h-3.5 text-primary" />
+              GitHub Database Link
+            </h4>
+            
+            {isSyncEnabled ? (
+              <div className="space-y-2 text-[12px]">
+                <p className="text-muted leading-relaxed">
+                  Your local browser is synced with the repository:
+                </p>
+                <code className="block bg-[#12121A] p-2 rounded text-primary font-mono text-[11px] break-all border border-border/40">
+                  {localStorage.getItem('trcapital_github_repo')}
+                </code>
+                <div className="flex items-center gap-1.5 text-[11px] text-success font-semibold mt-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-success animate-ping"></span>
+                  Active & Connected
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleConnectCloud} className="space-y-3.5 select-text">
+                <div>
+                  <label className="block text-[10px] font-semibold text-cream uppercase tracking-wider mb-1.5">
+                    Repository Path
+                  </label>
+                  <input
+                    type="text"
+                    value={cloudRepo}
+                    onChange={(e) => setCloudRepo(e.target.value)}
+                    placeholder="owner/repo (e.g. owner/tr-capital)"
+                    className="w-full px-2.5 py-1.5 bg-background border border-border rounded text-cream placeholder-hint text-[12px] font-mono focus:border-primary focus:outline-none"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-[10px] font-semibold text-cream uppercase tracking-wider mb-1.5">
+                    Personal Access Token (PAT)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showToken ? 'text' : 'password'}
+                      value={cloudToken}
+                      onChange={(e) => setCloudToken(e.target.value)}
+                      placeholder="ghp_xxxxxxxxxxxx"
+                      className="w-full pl-2.5 pr-8 py-1.5 bg-background border border-border rounded text-cream placeholder-hint text-[12px] font-mono focus:border-primary focus:outline-none"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowToken(!showToken)}
+                      className="absolute inset-y-0 right-0 flex items-center pr-2 text-hint hover:text-cream cursor-pointer border-0 bg-transparent"
+                    >
+                      {showToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={connecting}
+                  className="w-full py-2 bg-primary hover:bg-primary-hover text-[#0A0A0F] font-bold rounded text-[11px] uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 shadow-lg outline-none cursor-pointer border-0"
+                >
+                  {connecting ? (
+                    <>
+                      <RefreshCw className="w-3 h-3 animate-spin" />
+                      Linking Database...
+                    </>
+                  ) : (
+                    'Connect & Fetch Data'
+                  )}
+                </button>
+              </form>
+            )}
+          </div>
+        )}
       </div>
       
       {/* Security Disclaimer */}

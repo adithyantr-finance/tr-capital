@@ -240,6 +240,21 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [isSyncEnabled, githubToken, githubRepo, pushToCloud]);
 
+  // Listen to window focus events to pull concurrent updates from other devices automatically
+  useEffect(() => {
+    const handleFocus = () => {
+      if (isSyncEnabled && githubToken && githubRepo) {
+        console.log('SyncContext: Tab focused, pulling concurrent database updates...');
+        pullFromCloud();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [isSyncEnabled, githubToken, githubRepo, pullFromCloud]);
+
   return (
     <SyncContext.Provider
       value={{

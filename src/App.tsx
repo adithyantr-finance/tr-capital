@@ -47,6 +47,10 @@ function AppContent() {
     if (!isElectron) {
       const performSync = async () => {
         try {
+          // Prevent overwriting existing database with build-time exports
+          const hasUsers = !!localStorage.getItem('trcapital_users');
+          if (hasUsers) return;
+
           const res = await fetch('/exported_data.json');
           if (res.ok) {
             const data = await res.json();
