@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { PortfolioProvider } from './context/PortfolioContext';
+import { SyncProvider } from './context/SyncContext';
 import { ToastProvider } from './components/shared/Toast';
 import { Sidebar } from './components/shared/Sidebar';
 import { TopBar } from './components/shared/TopBar';
@@ -210,7 +211,9 @@ export default function App() {
     <ToastProvider>
       <AuthProvider>
         <PortfolioProvider>
-          <AppContent />
+          <SyncProvider>
+            <AppContent />
+          </SyncProvider>
         </PortfolioProvider>
       </AuthProvider>
     </ToastProvider>

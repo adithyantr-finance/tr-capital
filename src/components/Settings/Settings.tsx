@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { formatINR, formatDate } from '../../utils/calculations';
 import { generateId } from '../../utils/idGenerator';
 import { useToast } from '../shared/Toast';
+import { useSync } from '../../context/SyncContext';
 import { 
   Trash2, 
   Award, 
@@ -32,7 +33,7 @@ export const Settings: React.FC<SettingsProps> = () => {
   const { currentUser, updateUserProfile } = useAuth();
   const { showToast } = useToast();
 
-  const [activeSubTab, setActiveSubTab] = useState<'watchlist' | 'dividends' | 'profile'>('watchlist');
+  const [activeSubTab, setActiveSubTab] = useState<'watchlist' | 'dividends' | 'profile' | 'sync'>('watchlist');
   
   // Watchlist states
   const [newTicker, setNewTicker] = useState('');
@@ -43,6 +44,30 @@ export const Settings: React.FC<SettingsProps> = () => {
   const [divTicker, setDivTicker] = useState('');
   const [divAmount, setDivAmount] = useState('');
   const [divDesc, setDivDesc] = useState('');
+
+  // GitHub Cloud Sync states
+  const { 
+    githubToken,
+    githubRepo,
+    isSyncEnabled,
+    syncStatus,
+    lastSyncedAt,
+    enableSync,
+    disableSync,
+    pullFromCloud,
+    pushToCloud
+  } = useSync();
+
+  const [inputToken, setInputToken] = useState(githubToken);
+  const [inputRepo, setInputRepo] = useState(githubRepo);
+  const [showToken, setShowToken] = useState(false);
+  const [isSyncingAction, setIsSyncingAction] = useState(false);
+
+  // Sync inputs with GitHub credentials updates
+  React.useEffect(() => {
+    setInputToken(githubToken);
+    setInputRepo(githubRepo);
+  }, [githubToken, githubRepo, activeSubTab]);
 
   // Profile editing states
   const [displayName, setDisplayName] = useState(currentUser?.displayName || '');
@@ -234,6 +259,56 @@ export const Settings: React.FC<SettingsProps> = () => {
     }
   };
 
+  const handleConfigureSync = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputToken.trim() || !inputRepo.trim()) {
+      showToast('Please enter both your GitHub token and repository path.', 'error');
+      return;
+    }
+
+    setIsSyncingAction(true);
+    const res = await enableSync(inputToken, inputRepo);
+    setIsSyncingAction(false);
+
+    if (res.success) {
+      showToast('GitHub Cloud Sync enabled successfully!');
+    } else {
+      showToast(res.error || 'Failed to verify or connect to GitHub.', 'error');
+    }
+  };
+
+  const handleForcePull = async () => {
+    if (!confirm('Warning: Pulling from GitHub will overwrite all local settings and portfolios in this browser with the cloud database. Proceed?')) {
+      return;
+    }
+
+    setIsSyncingAction(true);
+    const res = await pullFromCloud();
+    setIsSyncingAction(false);
+
+    if (res.success) {
+      showToast('Cloud database pulled and merged successfully!');
+    } else {
+      showToast(res.error || 'Failed to pull cloud database.', 'error');
+    }
+  };
+
+  const handleForcePush = async () => {
+    if (!confirm('Warning: Pushing to GitHub will overwrite the cloud database file on the db-sync branch with your local browser data. Proceed?')) {
+      return;
+    }
+
+    setIsSyncingAction(true);
+    const res = await pushToCloud();
+    setIsSyncingAction(false);
+
+    if (res.success) {
+      showToast('Local database committed and pushed to GitHub!');
+    } else {
+      showToast(res.error || 'Failed to push local database to cloud.', 'error');
+    }
+  };
+
   return (
     <div className="space-y-6 select-text">
       {/* Header */}
@@ -275,6 +350,16 @@ export const Settings: React.FC<SettingsProps> = () => {
             }`}
         >
           User Profile
+        </button>
+        <button
+          onClick={() => setActiveSubTab('sync')}
+          className={`px-6 py-2.5 font-sans font-bold text-[12px] uppercase tracking-wider transition-colors border-b-2
+            ${activeSubTab === 'sync' 
+              ? 'border-primary text-primary' 
+              : 'border-transparent text-muted hover:text-cream'
+            }`}
+        >
+          Cloud Sync
         </button>
       </div>
 
@@ -493,9 +578,7 @@ export const Settings: React.FC<SettingsProps> = () => {
               </div>
             </div>
           </div>
-        )}
-
-        {/* 3. PROFILE SETTINGS */}
+        )}        {/* 3. PROFILE SETTINGS */}
         {activeSubTab === 'profile' && currentUser && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 select-text">
             {/* Left Column: Avatar & Metadata */}
@@ -531,7 +614,7 @@ export const Settings: React.FC<SettingsProps> = () => {
                 <h3 className="text-[15px] font-bold text-cream mt-4 font-sans">{displayName || currentUser.displayName}</h3>
                 <span className="text-[12px] text-muted font-mono mb-6">@{editUsername || currentUser.username}</span>
 
-                <div className="w-full space-y-3.5 text-[12px] text-left border-t border-border/40 pt-5">
+                <div className="w-full space-y-3.5 text-[12px] text-left border-t border-border/40 pt-5 mb-6">
                   <div className="flex justify-between">
                     <span className="text-muted">Account ID:</span>
                     <span className="text-cream font-mono font-bold">{currentUser.id.substring(0, 8)}...</span>
@@ -685,6 +768,202 @@ export const Settings: React.FC<SettingsProps> = () => {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* 4. GITHUB CLOUD SYNC TAB */}
+        {activeSubTab === 'sync' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 select-text animate-in fade-in duration-200">
+            {/* Left Column: Sync status & Toggle */}
+            <div className="lg:col-span-1 space-y-6 select-none">
+              <div className="bg-surface border border-border rounded p-6 flex flex-col items-center text-center">
+                {/* Sync status indicator */}
+                <div className={`p-4 rounded-full border mb-4 
+                  ${isSyncEnabled 
+                    ? 'bg-success/10 border-success/30 text-success' 
+                    : 'bg-muted/10 border-border text-muted'
+                  }`}
+                >
+                  <RefreshCw className={`w-8 h-8 ${syncStatus === 'syncing' ? 'animate-spin text-primary' : ''}`} />
+                </div>
+
+                <h3 className="text-[15px] font-bold text-cream mt-2 font-sans">GitHub Cloud Sync</h3>
+                <span className="text-[12px] text-muted mb-6">
+                  {isSyncEnabled ? 'Cloud Sync is Active' : 'Cloud Sync is Idle'}
+                </span>
+
+                <div className="w-full space-y-3.5 text-[12px] text-left border-t border-border/40 pt-5 mb-6">
+                  <div className="flex justify-between">
+                    <span className="text-muted">Status:</span>
+                    <span className={`font-bold uppercase tracking-wider text-[10px] flex items-center gap-1
+                      ${syncStatus === 'success' ? 'text-success' : ''}
+                      ${syncStatus === 'syncing' ? 'text-primary' : ''}
+                      ${syncStatus === 'error' ? 'text-danger' : ''}
+                      ${syncStatus === 'idle' ? 'text-muted' : ''}
+                    `}>
+                      <span className={`w-1.5 h-1.5 rounded-full 
+                        ${syncStatus === 'success' ? 'bg-success animate-pulse' : ''}
+                        ${syncStatus === 'syncing' ? 'bg-primary animate-ping' : ''}
+                        ${syncStatus === 'error' ? 'bg-danger animate-pulse' : ''}
+                        ${syncStatus === 'idle' ? 'bg-muted' : ''}
+                      `}></span>
+                      {syncStatus}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted">Last Synced:</span>
+                    <span className="text-cream font-mono font-bold">
+                      {lastSyncedAt ? lastSyncedAt.toLocaleTimeString() : 'Never'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted">Branch:</span>
+                    <span className="text-primary font-mono font-bold uppercase tracking-wide text-[10px]">db-sync</span>
+                  </div>
+                </div>
+
+                {isSyncEnabled && (
+                  <button
+                    onClick={disableSync}
+                    className="w-full py-2 bg-danger/10 hover:bg-danger/20 border border-danger/30 hover:border-danger text-danger font-bold rounded text-[12px] uppercase tracking-wider transition-colors cursor-pointer outline-none"
+                  >
+                    Disconnect Sync
+                  </button>
+                )}
+              </div>
+
+              {/* Instructions */}
+              <div className="p-5 bg-surface border border-border rounded leading-relaxed text-[12px] text-muted space-y-3">
+                <strong className="text-cream block border-b border-border/40 pb-2 uppercase text-[11px] tracking-wider">
+                  How to setup Cloud Sync:
+                </strong>
+                <ol className="list-decimal pl-4 space-y-2">
+                  <li>Go to your GitHub Settings ➔ Developer Settings ➔ <strong>Personal Access Tokens</strong> (Fine-grained).</li>
+                  <li>Click <strong>Generate new token</strong>. Set token name e.g., <code>TR-Capital-Sync</code>.</li>
+                  <li>Under <strong>Repository access</strong>, select "Only select repositories" and choose <code>tr-capital</code>.</li>
+                  <li>Under <strong>Permissions</strong>, grant <strong>Contents</strong>: Read & Write.</li>
+                  <li>Generate token, copy the secret PAT value, and paste it here with your repository path.</li>
+                </ol>
+              </div>
+            </div>
+
+            {/* Right Column: Connection Form & Actions */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Form */}
+              <form onSubmit={handleConfigureSync} className="bg-surface border border-border rounded p-6 space-y-5">
+                <h3 className="text-[13px] font-bold text-cream uppercase tracking-wider border-b border-border/40 pb-3 flex items-center gap-2 select-none">
+                  <RefreshCw className="w-4 h-4 text-primary" />
+                  Configure Repository Database
+                </h3>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-cream uppercase tracking-wider mb-2">
+                      GitHub Repository Path *
+                    </label>
+                    <input
+                      type="text"
+                      value={inputRepo}
+                      onChange={(e) => setInputRepo(e.target.value)}
+                      placeholder="e.g. adithyantr-finance/tr-capital"
+                      disabled={isSyncEnabled}
+                      className="w-full px-3 py-2 bg-background border border-border rounded text-cream placeholder-hint text-[13px] font-mono transition-colors focus:border-primary focus:outline-none disabled:opacity-60"
+                      required
+                    />
+                    <p className="text-[10px] text-hint mt-1.5">
+                      Input your GitHub username and repo name in the format: <code>owner/repo</code>.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-cream uppercase tracking-wider mb-2">
+                      Personal Access Token (PAT) *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showToken ? 'text' : 'password'}
+                        value={inputToken}
+                        onChange={(e) => setInputToken(e.target.value)}
+                        placeholder="ghp_xxxxxxxxxxxx"
+                        disabled={isSyncEnabled}
+                        className="w-full pl-3 pr-10 py-2 bg-background border border-border rounded text-cream placeholder-hint text-[13px] font-mono transition-colors focus:border-primary focus:outline-none disabled:opacity-60"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowToken(!showToken)}
+                        disabled={isSyncEnabled}
+                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-hint hover:text-cream cursor-pointer border-0 bg-transparent disabled:opacity-30"
+                      >
+                        {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {!isSyncEnabled && (
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="submit"
+                      disabled={isSyncingAction}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-[#0A0A0F] font-bold rounded text-[12px] uppercase tracking-wider transition-all shadow-lg disabled:opacity-50 cursor-pointer border-0 outline-none"
+                    >
+                      {isSyncingAction ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          Verifying & Connecting...
+                        </>
+                      ) : (
+                        'Save & Connect Sync'
+                      )}
+                    </button>
+                  </div>
+                )}
+              </form>
+
+              {/* Manual Operations (Visible only when connected) */}
+              {isSyncEnabled && (
+                <div className="bg-surface border border-border rounded p-6 space-y-5">
+                  <h3 className="text-[13px] font-bold text-cream uppercase tracking-wider border-b border-border/40 pb-3 select-none">
+                    Manual Sync Commands
+                  </h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-4 bg-[#0A0A0F]/60 border border-border rounded flex flex-col justify-between">
+                      <div className="mb-4">
+                        <strong className="text-cream text-[12px] block mb-1">Pull Database from Cloud</strong>
+                        <p className="text-[11px] text-muted leading-relaxed">
+                          Force retrieve the latest <code>trcapital_db.json</code> file from GitHub and merge/overwrite all local data in this browser.
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleForcePull}
+                        disabled={isSyncingAction}
+                        className="w-full py-2 bg-elevated hover:bg-[#1A1A26] border border-border hover:border-primary text-cream hover:text-primary font-bold rounded text-[11px] uppercase tracking-wider transition-colors cursor-pointer outline-none"
+                      >
+                        {isSyncingAction ? 'Processing...' : 'Force Pull (Cloud ➔ Local)'}
+                      </button>
+                    </div>
+
+                    <div className="p-4 bg-[#0A0A0F]/60 border border-border rounded flex flex-col justify-between">
+                      <div className="mb-4">
+                        <strong className="text-cream text-[12px] block mb-1">Push Database to Cloud</strong>
+                        <p className="text-[11px] text-muted leading-relaxed">
+                          Force commit and overwrite the database file on GitHub with your local browser's transaction portfolios.
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleForcePush}
+                        disabled={isSyncingAction}
+                        className="w-full py-2 bg-elevated hover:bg-[#1A1A26] border border-border hover:border-primary text-cream hover:text-primary font-bold rounded text-[11px] uppercase tracking-wider transition-colors cursor-pointer outline-none"
+                      >
+                        {isSyncingAction ? 'Processing...' : 'Force Push (Local ➔ Cloud)'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

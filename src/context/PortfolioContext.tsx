@@ -452,6 +452,9 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (currentPortfolioStr !== updatedPortfolioStr) {
       updateUserPortfolio(currentUser.id, updatedPortfolio);
     }
+    
+    // Dispatch changed event for GitHub Cloud Sync
+    window.dispatchEvent(new Event('trcapital-db-changed'));
   }, [state, username, isLoaded, currentUser, updateUserPortfolio]);
 
   // Re-fetch Live stock prices and Mutual Fund NAVs

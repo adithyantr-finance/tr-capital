@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { LogOut, Minus, Square, X, User as UserIcon, ChevronDown, Lock, Menu } from 'lucide-react';
+import { LogOut, Minus, Square, X, User as UserIcon, ChevronDown, Lock, Menu, Cloud, CloudOff } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useSync } from '../../context/SyncContext';
 
 interface TopBarProps {
   title: string;
@@ -11,6 +12,7 @@ interface TopBarProps {
 
 export const TopBar: React.FC<TopBarProps> = ({ title, onChangePassword, isSidebarCollapsed, onToggleMobile }) => {
   const { currentUser, logout } = useAuth();
+  const { isSyncEnabled, syncStatus, lastSyncedAt } = useSync();
   const isElectron = !!(window as any).electron;
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -61,6 +63,33 @@ export const TopBar: React.FC<TopBarProps> = ({ title, onChangePassword, isSideb
 
       {/* User Session & System Commands */}
       <div className="flex items-center gap-6" style={{ WebkitAppRegion: 'no-drag' } as any}>
+        {/* Cloud Sync Status Indicator */}
+        {isSyncEnabled && (
+          <div 
+            className="flex items-center gap-1.5 px-2 py-0.5 rounded border border-border/40 bg-surface/50 text-[10px] font-sans font-medium text-muted animate-in fade-in select-none"
+            title={lastSyncedAt ? `Last synced: ${lastSyncedAt.toLocaleTimeString()}` : 'Syncing...'}
+          >
+            {syncStatus === 'syncing' && (
+              <>
+                <Cloud className="w-3.5 h-3.5 text-primary animate-pulse" />
+                <span className="text-primary text-[9px] uppercase font-bold tracking-wider animate-pulse hidden sm:inline">Syncing</span>
+              </>
+            )}
+            {syncStatus === 'success' && (
+              <>
+                <Cloud className="w-3.5 h-3.5 text-success" />
+                <span className="text-success text-[9px] uppercase font-bold tracking-wider hidden sm:inline">Synced</span>
+              </>
+            )}
+            {syncStatus === 'error' && (
+              <>
+                <CloudOff className="w-3.5 h-3.5 text-danger animate-bounce" />
+                <span className="text-danger text-[9px] uppercase font-bold tracking-wider hidden sm:inline">Offline</span>
+              </>
+            )}
+          </div>
+        )}
+
         {/* User Badge & Dropdown */}
         {currentUser && (
           <div className="relative" ref={dropdownRef}>

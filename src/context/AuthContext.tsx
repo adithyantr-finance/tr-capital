@@ -95,6 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updatedUsers = [...users, newUser];
     setUsers(updatedUsers);
     localStorage.setItem('trcapital_users', JSON.stringify(updatedUsers));
+    window.dispatchEvent(new Event('trcapital-db-changed'));
     
     // Auto-login upon registration
     setCurrentUser(newUser);
@@ -122,6 +123,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updatedUsers = users.map(u => u.id === currentUser.id ? updatedUser : u);
     setUsers(updatedUsers);
     localStorage.setItem('trcapital_users', JSON.stringify(updatedUsers));
+    window.dispatchEvent(new Event('trcapital-db-changed'));
     
     setCurrentUser(updatedUser);
     localStorage.setItem('trcapital_session_user', JSON.stringify(updatedUser));
@@ -190,6 +192,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updatedUsers = users.map(u => u.id === currentUser.id ? updatedUser : u);
     setUsers(updatedUsers);
     localStorage.setItem('trcapital_users', JSON.stringify(updatedUsers));
+    window.dispatchEvent(new Event('trcapital-db-changed'));
 
     // Update current session
     setCurrentUser(updatedUser);
@@ -207,6 +210,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return u;
       });
       localStorage.setItem('trcapital_users', JSON.stringify(updated));
+      window.dispatchEvent(new Event('trcapital-db-changed'));
       return updated;
     });
 
