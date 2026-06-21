@@ -25,6 +25,15 @@ function AppContent() {
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isQuickBuyOpen, setIsQuickBuyOpen] = useState(false);
 
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Load sidebar state from localStorage
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     const saved = localStorage.getItem('trcapital_sidebar_collapsed');
@@ -136,22 +145,33 @@ function AppContent() {
         setActiveTab={setActiveTab} 
         isCollapsed={isSidebarCollapsed}
         onToggle={handleToggleSidebar}
+        isMobileOpen={isMobileMenuOpen}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
       />
+
+      {/* Mobile Drawer Backdrop Overlay */}
+      {isMobile && isMobileMenuOpen && (
+        <div 
+          onClick={() => setIsMobileMenuOpen(false)}
+          className="fixed inset-0 bg-[#000000]/70 z-[35] animate-fade-in"
+        />
+      )}
 
       {/* Main Content Area */}
       <div 
         className="flex-1 flex flex-col min-h-screen transition-all duration-200"
-        style={{ paddingLeft: isSidebarCollapsed ? '60px' : '220px' }}
+        style={{ paddingLeft: isMobile ? '0px' : (isSidebarCollapsed ? '60px' : '220px') }}
       >
         {/* Fixed Top Header bar */}
         <TopBar 
           title={getHeaderTitle()} 
           onChangePassword={() => setIsChangePasswordOpen(true)} 
           isSidebarCollapsed={isSidebarCollapsed}
+          onToggleMobile={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         />
 
         {/* Content Body Router */}
-        <main className="flex-1 p-8 pt-24 overflow-y-auto w-full max-w-[1600px] mx-auto animate-in fade-in duration-200">
+        <main className="flex-1 p-4 pt-20 md:p-8 md:pt-24 overflow-y-auto w-full max-w-[1600px] mx-auto animate-in fade-in duration-200">
           {activeTab === 'dashboard' && <Dashboard />}
           {activeTab === 'equity' && <EquityPortfolio />}
           {activeTab === 'mutual_funds' && <MutualFunds />}

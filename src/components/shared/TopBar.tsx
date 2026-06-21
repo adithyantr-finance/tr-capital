@@ -1,18 +1,21 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { LogOut, Minus, Square, X, User as UserIcon, ChevronDown, Lock } from 'lucide-react';
+import { LogOut, Minus, Square, X, User as UserIcon, ChevronDown, Lock, Menu } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 interface TopBarProps {
   title: string;
   onChangePassword: () => void;
   isSidebarCollapsed?: boolean;
+  onToggleMobile?: () => void;
 }
 
-export const TopBar: React.FC<TopBarProps> = ({ title, onChangePassword, isSidebarCollapsed }) => {
+export const TopBar: React.FC<TopBarProps> = ({ title, onChangePassword, isSidebarCollapsed, onToggleMobile }) => {
   const { currentUser, logout } = useAuth();
   const isElectron = !!(window as any).electron;
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -22,7 +25,14 @@ export const TopBar: React.FC<TopBarProps> = ({ title, onChangePassword, isSideb
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('resize', handleResize);
+    };
   }, []);
 
   const handleControl = (action: 'minimize' | 'maximize' | 'close') => {
@@ -33,12 +43,20 @@ export const TopBar: React.FC<TopBarProps> = ({ title, onChangePassword, isSideb
 
   return (
     <header 
-      className="h-16 fixed top-0 right-0 bg-surface/90 backdrop-blur border-b border-border flex items-center justify-between px-6 z-20 select-none transition-all duration-200"
-      style={{ left: isSidebarCollapsed ? '60px' : '220px', WebkitAppRegion: 'drag' } as any}
+      className="h-16 fixed top-0 right-0 bg-surface/90 backdrop-blur border-b border-border flex items-center justify-between px-4 md:px-6 z-20 select-none transition-all duration-200"
+      style={{ left: isMobile ? '0px' : (isSidebarCollapsed ? '60px' : '220px'), WebkitAppRegion: 'drag' } as any}
     >
       {/* Module Title */}
       <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
-        <h1 className="font-sans text-[16px] font-bold text-cream tracking-wide uppercase">{title}</h1>
+        {isMobile && onToggleMobile && (
+          <button 
+            onClick={onToggleMobile}
+            className="p-1.5 hover:bg-elevated rounded border border-border text-cream cursor-pointer mr-1"
+          >
+            <Menu className="w-5 h-5 text-primary" />
+          </button>
+        )}
+        <h1 className="font-sans text-[14px] md:text-[16px] font-bold text-cream tracking-wide uppercase">{title}</h1>
       </div>
 
       {/* User Session & System Commands */}

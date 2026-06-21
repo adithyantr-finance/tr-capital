@@ -18,13 +18,17 @@ interface SidebarProps {
   setActiveTab: (tab: string) => void;
   isCollapsed: boolean;
   onToggle: () => void;
+  isMobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
   activeTab, 
   setActiveTab, 
   isCollapsed, 
-  onToggle 
+  onToggle,
+  isMobileOpen = false,
+  onCloseMobile
 }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -37,10 +41,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
+  const handleTabClick = (tabId: string) => {
+    setActiveTab(tabId);
+    if (onCloseMobile) {
+      onCloseMobile();
+    }
+  };
+
   return (
     <aside 
-      className={`fixed top-0 bottom-0 left-0 bg-surface border-r border-border flex flex-col z-30 transition-all duration-200 select-none overflow-x-hidden`}
-      style={{ width: isCollapsed ? '60px' : '220px' }}
+      className={`fixed top-0 bottom-0 bg-surface border-r border-border flex flex-col z-40 transition-all duration-200 select-none overflow-x-hidden
+        ${isMobileOpen ? 'left-0' : '-left-[220px] md:left-0'}`}
+      style={{ width: isMobileOpen ? '220px' : (isCollapsed ? '60px' : '220px') }}
     >
       {/* App Branding Header - Monogram or Wordmark */}
       <div 
@@ -72,7 +84,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             return (
               <li key={item.id}>
                 <button
-                  onClick={() => setActiveTab(item.id)}
+                  onClick={() => handleTabClick(item.id)}
                   className={`w-full flex items-center px-4 py-3 text-left font-sans text-[14px] font-medium tracking-wide transition-all border-l-2 group relative cursor-pointer
                     ${isActive 
                       ? 'bg-elevated text-primary border-primary' 
@@ -98,7 +110,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </nav>
 
       {/* Sidebar Toggle Button at Bottom */}
-      <div className="border-t border-border/40 shrink-0">
+      <div className="border-t border-border/40 shrink-0 hidden md:block">
         <button
           onClick={onToggle}
           className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-elevated/40 text-[#A0A0B0] hover:text-primary transition-colors font-sans text-[12px] font-bold uppercase tracking-wider cursor-pointer"
