@@ -353,7 +353,7 @@ interface PortfolioContextType {
 const PortfolioContext = createContext<PortfolioContextType | undefined>(undefined);
 
 export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentUser } = useAuth();
+  const { currentUser, updateUserPortfolio } = useAuth();
   const { fetchStock } = useStockData();
   const { fetchMFDetails } = useMFData();
 
@@ -378,26 +378,41 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
 
     try {
-      const storedBuys = localStorage.getItem(getStorageKey('buys'));
-      const storedSells = localStorage.getItem(getStorageKey('sells'));
-      const storedFunds = localStorage.getItem(getStorageKey('funds'));
-      const storedAlts = localStorage.getItem(getStorageKey('alternatives'));
-      const storedCash = localStorage.getItem(getStorageKey('cash'));
-      const storedWatchlist = localStorage.getItem(getStorageKey('watchlist'));
-      const storedDivs = localStorage.getItem(getStorageKey('dividends'));
+      if (currentUser?.portfolio) {
+        dispatch({
+          type: 'SET_PORTFOLIO',
+          payload: {
+            buys: currentUser.portfolio.buys || [],
+            sells: currentUser.portfolio.sells || [],
+            funds: currentUser.portfolio.funds || [],
+            alternatives: currentUser.portfolio.alternatives || [],
+            cash: currentUser.portfolio.cash || [],
+            watchlist: currentUser.portfolio.watchlist || [],
+            dividends: currentUser.portfolio.dividends || []
+          }
+        });
+      } else {
+        const storedBuys = localStorage.getItem(getStorageKey('buys'));
+        const storedSells = localStorage.getItem(getStorageKey('sells'));
+        const storedFunds = localStorage.getItem(getStorageKey('funds'));
+        const storedAlts = localStorage.getItem(getStorageKey('alternatives'));
+        const storedCash = localStorage.getItem(getStorageKey('cash'));
+        const storedWatchlist = localStorage.getItem(getStorageKey('watchlist'));
+        const storedDivs = localStorage.getItem(getStorageKey('dividends'));
 
-      dispatch({
-        type: 'SET_PORTFOLIO',
-        payload: {
-          buys: storedBuys ? JSON.parse(storedBuys) : [],
-          sells: storedSells ? JSON.parse(storedSells) : [],
-          funds: storedFunds ? JSON.parse(storedFunds) : [],
-          alternatives: storedAlts ? JSON.parse(storedAlts) : [],
-          cash: storedCash ? JSON.parse(storedCash) : [],
-          watchlist: storedWatchlist ? JSON.parse(storedWatchlist) : [],
-          dividends: storedDivs ? JSON.parse(storedDivs) : []
-        }
-      });
+        dispatch({
+          type: 'SET_PORTFOLIO',
+          payload: {
+            buys: storedBuys ? JSON.parse(storedBuys) : [],
+            sells: storedSells ? JSON.parse(storedSells) : [],
+            funds: storedFunds ? JSON.parse(storedFunds) : [],
+            alternatives: storedAlts ? JSON.parse(storedAlts) : [],
+            cash: storedCash ? JSON.parse(storedCash) : [],
+            watchlist: storedWatchlist ? JSON.parse(storedWatchlist) : [],
+            dividends: storedDivs ? JSON.parse(storedDivs) : []
+          }
+        });
+      }
       
       const storedTime = localStorage.getItem(getStorageKey('last_updated'));
       setLastUpdated(storedTime ? new Date(storedTime) : null);
@@ -407,9 +422,11 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [username]);
 
-  // Synchronize writes to localStorage
+  // Synchronize writes to localStorage & global database
   useEffect(() => {
-    if (!username || !isLoaded) return;
+    if (!username || !isLoaded || !currentUser) return;
+    
+    // Save to namespaced keys
     localStorage.setItem(getStorageKey('buys'), JSON.stringify(state.buys));
     localStorage.setItem(getStorageKey('sells'), JSON.stringify(state.sells));
     localStorage.setItem(getStorageKey('funds'), JSON.stringify(state.funds));
@@ -417,7 +434,25 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     localStorage.setItem(getStorageKey('cash'), JSON.stringify(state.cash));
     localStorage.setItem(getStorageKey('watchlist'), JSON.stringify(state.watchlist));
     localStorage.setItem(getStorageKey('dividends'), JSON.stringify(state.dividends));
-  }, [state, username, isLoaded]);
+
+    // Save to user object in global database
+    const updatedPortfolio = {
+      buys: state.buys,
+      sells: state.sells,
+      funds: state.funds,
+      alternatives: state.alternatives,
+      cash: state.cash,
+      watchlist: state.watchlist,
+      dividends: state.dividends
+    };
+
+    const currentPortfolioStr = JSON.stringify(currentUser.portfolio || {});
+    const updatedPortfolioStr = JSON.stringify(updatedPortfolio);
+
+    if (currentPortfolioStr !== updatedPortfolioStr) {
+      updateUserPortfolio(currentUser.id, updatedPortfolio);
+    }
+  }, [state, username, isLoaded, currentUser, updateUserPortfolio]);
 
   // Re-fetch Live stock prices and Mutual Fund NAVs
   const refreshAllData = useCallback(async () => {

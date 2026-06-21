@@ -179,7 +179,7 @@ function AppContent() {
           {activeTab === 'cash' && <CashLedger />}
           {activeTab === 'analytics' && <Performance />}
           {activeTab === 'import_export' && <ImportExport onNavigate={setActiveTab} />}
-          {activeTab === 'settings' && <Settings onChangePassword={() => setIsChangePasswordOpen(true)} />}
+          {activeTab === 'settings' && <Settings />}
         </main>
       </div>
 

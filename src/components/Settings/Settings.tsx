@@ -11,14 +11,15 @@ import {
   DollarSign, 
   ListPlus,
   RefreshCw,
-  Lock
+  Camera,
+  Mail,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
-interface SettingsProps {
-  onChangePassword: () => void;
-}
+interface SettingsProps {}
 
-export const Settings: React.FC<SettingsProps> = ({ onChangePassword }) => {
+export const Settings: React.FC<SettingsProps> = () => {
   const { 
     watchlist, 
     addToWatchlist, 
@@ -28,7 +29,7 @@ export const Settings: React.FC<SettingsProps> = ({ onChangePassword }) => {
     deleteDividend,
     buys
   } = usePortfolio();
-  const { currentUser } = useAuth();
+  const { currentUser, updateUserProfile } = useAuth();
   const { showToast } = useToast();
 
   const [activeSubTab, setActiveSubTab] = useState<'watchlist' | 'dividends' | 'profile'>('watchlist');
@@ -42,6 +43,29 @@ export const Settings: React.FC<SettingsProps> = ({ onChangePassword }) => {
   const [divTicker, setDivTicker] = useState('');
   const [divAmount, setDivAmount] = useState('');
   const [divDesc, setDivDesc] = useState('');
+
+  // Profile editing states
+  const [displayName, setDisplayName] = useState(currentUser?.displayName || '');
+  const [editUsername, setEditUsername] = useState(currentUser?.username || '');
+  const [email, setEmail] = useState(currentUser?.email || '');
+  const [profilePic, setProfilePic] = useState(currentUser?.profilePicture || '');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  // Sync profile fields with currentUser updates
+  React.useEffect(() => {
+    if (currentUser) {
+      setDisplayName(currentUser.displayName);
+      setEditUsername(currentUser.username);
+      setEmail(currentUser.email || '');
+      setProfilePic(currentUser.profilePicture || '');
+      setPassword('');
+      setConfirmPassword('');
+    }
+  }, [currentUser, activeSubTab]);
 
   // Auto suggest active tickers from buy book for dividends
   const activeEquityTickers = useMemo(() => {
@@ -93,6 +117,121 @@ export const Settings: React.FC<SettingsProps> = ({ onChangePassword }) => {
     setDivAmount('');
     setDivDesc('');
     setDivDate(new Date().toISOString().slice(0, 10));
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('Image file is too large (max 5MB).', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 128;
+        const MAX_HEIGHT = 128;
+        let width = img.width;
+        let height = img.height;
+
+        let startX = 0;
+        let startY = 0;
+        let size = Math.min(width, height);
+        
+        startX = (width - size) / 2;
+        startY = (height - size) / 2;
+
+        canvas.width = MAX_WIDTH;
+        canvas.height = MAX_HEIGHT;
+
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, startX, startY, size, size, 0, 0, MAX_WIDTH, MAX_HEIGHT);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          setProfilePic(dataUrl);
+          showToast('Profile picture uploaded & optimized!');
+        }
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleProfileUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) return;
+
+    if (!displayName.trim()) {
+      showToast('Display Name cannot be empty.', 'error');
+      return;
+    }
+
+    const cleanUsername = editUsername.trim().toLowerCase();
+    if (!cleanUsername) {
+      showToast('Username cannot be empty.', 'error');
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9_]+$/.test(cleanUsername)) {
+      showToast('Username can only contain letters, numbers, and underscores.', 'error');
+      return;
+    }
+
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      showToast('Please enter a valid email address.', 'error');
+      return;
+    }
+
+    if (password) {
+      if (password.length < 6) {
+        showToast('Password must be at least 6 characters long.', 'error');
+        return;
+      }
+      if (password !== confirmPassword) {
+        showToast('Passwords do not match.', 'error');
+        return;
+      }
+    }
+
+    setIsSavingProfile(true);
+
+    try {
+      const isUsernameChanging = cleanUsername !== currentUser.username;
+      
+      const payload: any = {
+        displayName: displayName.trim(),
+        username: cleanUsername,
+        email: email.trim(),
+        profilePicture: profilePic
+      };
+
+      if (password) {
+        payload.password = password;
+      }
+
+      const res = await updateUserProfile(payload);
+      if (res.success) {
+        showToast('Profile settings updated successfully!');
+        if (isUsernameChanging) {
+          showToast(`Username updated to "${cleanUsername}". Data successfully migrated.`);
+        }
+        setPassword('');
+        setConfirmPassword('');
+      } else {
+        showToast(res.error || 'Failed to update profile settings.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('An unexpected error occurred during profile update.', 'error');
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   return (
@@ -358,48 +497,194 @@ export const Settings: React.FC<SettingsProps> = ({ onChangePassword }) => {
 
         {/* 3. PROFILE SETTINGS */}
         {activeSubTab === 'profile' && currentUser && (
-          <div className="max-w-xl bg-surface border border-border rounded p-6 space-y-6 select-none">
-            <div className="flex items-center gap-4 border-b border-border/40 pb-5">
-              <div className="p-4 rounded-full bg-elevated text-primary border border-border">
-                <UserIcon className="w-8 h-8" />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 select-text">
+            {/* Left Column: Avatar & Metadata */}
+            <div className="lg:col-span-1 space-y-6">
+              <div className="bg-surface border border-border rounded p-6 flex flex-col items-center text-center">
+                {/* Profile Picture Upload Container */}
+                <div className="relative group cursor-pointer w-24 h-24 rounded-full overflow-hidden border-2 border-border hover:border-primary transition-all duration-300 shadow-lg shadow-black/40">
+                  {profilePic ? (
+                    <img 
+                      src={profilePic} 
+                      alt="Profile Avatar" 
+                      className="w-full h-full object-cover animate-in fade-in" 
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-elevated text-primary flex items-center justify-center font-sans font-bold text-3xl uppercase">
+                      {displayName.trim().charAt(0) || currentUser.username.charAt(0)}
+                    </div>
+                  )}
+                  {/* Hover Camera Overlay */}
+                  <label htmlFor="avatar-upload" className="absolute inset-0 bg-[#000000]/70 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer">
+                    <Camera className="w-5 h-5 text-primary mb-1 animate-pulse" />
+                    <span className="text-[9px] text-cream uppercase font-bold tracking-wider">Change</span>
+                  </label>
+                  <input 
+                    type="file" 
+                    id="avatar-upload" 
+                    accept="image/*" 
+                    onChange={handleImageChange} 
+                    className="hidden" 
+                  />
+                </div>
+
+                <h3 className="text-[15px] font-bold text-cream mt-4 font-sans">{displayName || currentUser.displayName}</h3>
+                <span className="text-[12px] text-muted font-mono mb-6">@{editUsername || currentUser.username}</span>
+
+                <div className="w-full space-y-3.5 text-[12px] text-left border-t border-border/40 pt-5">
+                  <div className="flex justify-between">
+                    <span className="text-muted">Account ID:</span>
+                    <span className="text-cream font-mono font-bold">{currentUser.id.substring(0, 8)}...</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted">Registered On:</span>
+                    <span className="text-cream font-mono font-bold">{formatDate(currentUser.createdAt)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted">Persistence Status:</span>
+                    <span className="text-primary font-bold uppercase tracking-wider text-[10px] flex items-center gap-1">
+                      <Award className="w-3 h-3" />
+                      Secure Mode
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <h3 className="text-[16px] font-bold text-cream font-sans">{currentUser.displayName}</h3>
-                <span className="text-[12px] text-muted font-mono">{currentUser.username}</span>
+
+              {/* Warning note */}
+              <div className="p-4 bg-[#0A0A0F]/80 border border-border/80 rounded leading-relaxed text-[12px] text-muted shadow-inner select-none">
+                <strong className="text-cream block mb-1">Local Storage Database:</strong>
+                This profile is stored fully client-side inside namespaced localStorage buckets. Deleting browser caches, cleaning app files or logging out does NOT delete your data, but clearing cookies/site-data will reset it. Export regular backups in the <strong>Import / Export</strong> tab.
               </div>
             </div>
 
-            <div className="space-y-4 text-[13px] font-sans">
-              <div className="flex justify-between border-b border-border/20 pb-2">
-                <span className="text-muted">Account ID:</span>
-                <span className="text-cream font-mono font-bold text-[12px]">{currentUser.id}</span>
-              </div>
-              <div className="flex justify-between border-b border-border/20 pb-2">
-                <span className="text-muted">Member Since:</span>
-                <span className="text-cream font-mono font-bold text-[12px]">{formatDate(currentUser.createdAt)}</span>
-              </div>
-              <div className="flex justify-between border-b border-border/20 pb-2">
-                <span className="text-muted">Ledger Persistence:</span>
-                <span className="text-primary font-bold uppercase tracking-wide text-[11px] flex items-center gap-1.5">
-                  <Award className="w-3.5 h-3.5" />
-                  Local Storage Secure Mode
-                </span>
-              </div>
-            </div>
+            {/* Right Column: Update Settings Form */}
+            <div className="lg:col-span-2">
+              <form onSubmit={handleProfileUpdate} className="bg-surface border border-border rounded p-6 space-y-5">
+                <h3 className="text-[13px] font-bold text-cream uppercase tracking-wider border-b border-border/40 pb-3 flex items-center gap-2 select-none">
+                  <UserIcon className="w-4 h-4 text-primary" />
+                  Edit Profile Credentials
+                </h3>
 
-            <div className="pt-2 select-none">
-              <button
-                onClick={onChangePassword}
-                className="px-4 py-2 bg-elevated border border-border hover:bg-[#1E1E2E] text-cream font-bold rounded text-[12px] uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-2"
-              >
-                <Lock className="w-3.5 h-3.5 text-primary" />
-                Change Password
-              </button>
-            </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-cream uppercase tracking-wider mb-2 select-none">
+                      Display Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      placeholder="Enter display name"
+                      className="w-full px-3 py-2 bg-background border border-border rounded text-cream placeholder-hint text-[13px] transition-colors focus:border-primary focus:outline-none"
+                      required
+                    />
+                  </div>
 
-            <div className="p-4 bg-[#0A0A0F] border border-border rounded leading-relaxed text-[12px] text-muted">
-              <strong className="text-cream block mb-1">Local Storage Warning:</strong>
-              This application stores all your financial data client-side in the browser/Electron localStorage layers. Clearing browser caches, cookies or deleting local app data will erase your transactions. Remember to use the <strong>Import / Export</strong> tab to back up your portfolio regularly!
+                  <div>
+                    <label className="block text-[11px] font-semibold text-cream uppercase tracking-wider mb-2 select-none">
+                      Username *
+                    </label>
+                    <input
+                      type="text"
+                      value={editUsername}
+                      onChange={(e) => setEditUsername(e.target.value)}
+                      placeholder="Enter username"
+                      className="w-full px-3 py-2 bg-background border border-border rounded text-cream placeholder-hint text-[13px] font-mono transition-colors focus:border-primary focus:outline-none lowercase"
+                      required
+                    />
+                    <p className="text-[10px] text-hint mt-1.5 leading-normal select-none">
+                      Note: Changing username will automatically migrate your portfolio keys.
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-cream uppercase tracking-wider mb-2 select-none">
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-hint select-none">
+                      <Mail className="w-4 h-4" />
+                    </span>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="e.g. adithyan@domain.com"
+                      className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded text-cream placeholder-hint text-[13px] transition-colors focus:border-primary focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="border-t border-border/40 my-6 pt-4">
+                  <h4 className="text-[11px] font-bold text-cream uppercase tracking-wider mb-4 select-none">
+                    Update Security Password (Optional)
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-cream uppercase tracking-wider mb-2 select-none">
+                        New Password
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="Leave blank to keep current"
+                          className="w-full pl-3 pr-10 py-2 bg-background border border-border rounded text-cream placeholder-hint text-[13px] transition-colors focus:border-primary focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute inset-y-0 right-0 flex items-center pr-3 text-hint hover:text-cream cursor-pointer border-0 bg-transparent animate-in fade-in"
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-cream uppercase tracking-wider mb-2 select-none">
+                        Confirm New Password
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showConfirmPassword ? 'text' : 'password'}
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          placeholder="Confirm new password"
+                          className="w-full pl-3 pr-10 py-2 bg-background border border-border rounded text-cream placeholder-hint text-[13px] transition-colors focus:border-primary focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute inset-y-0 right-0 flex items-center pr-3 text-hint hover:text-cream cursor-pointer border-0 bg-transparent animate-in fade-in"
+                        >
+                          {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-3 select-none">
+                  <button
+                    type="submit"
+                    disabled={isSavingProfile}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover text-[#0A0A0F] font-bold rounded text-[12px] uppercase tracking-wider transition-all shadow-lg hover:shadow-primary/10 disabled:opacity-50 cursor-pointer border-0 outline-none"
+                  >
+                    {isSavingProfile ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Saving Profile...
+                      </>
+                    ) : (
+                      'Save Profile Settings'
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

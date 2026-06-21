@@ -66,9 +66,17 @@ export const TopBar: React.FC<TopBarProps> = ({ title, onChangePassword, isSideb
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center gap-2 px-3 py-1 bg-elevated hover:bg-[#1E1E2E] rounded border border-border transition-colors cursor-pointer select-none"
+              className="flex items-center gap-2 px-2.5 py-1 bg-elevated hover:bg-[#1E1E2E] rounded border border-border transition-colors cursor-pointer select-none"
             >
-              <UserIcon className="w-3.5 h-3.5 text-primary" />
+              {currentUser.profilePicture ? (
+                <img 
+                  src={currentUser.profilePicture} 
+                  alt={currentUser.displayName} 
+                  className="w-5 h-5 rounded-full object-cover border border-border" 
+                />
+              ) : (
+                <UserIcon className="w-3.5 h-3.5 text-primary" />
+              )}
               <span className="font-sans text-[13px] text-[#F0F0F5] font-medium">
                 {currentUser.displayName}
               </span>

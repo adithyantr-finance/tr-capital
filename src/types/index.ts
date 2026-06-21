@@ -1,9 +1,22 @@
+export interface UserPortfolio {
+  buys: EquityBuy[];
+  sells: EquitySell[];
+  funds: MutualFund[];
+  alternatives: AlternativeInvestment[];
+  cash: CashEntry[];
+  watchlist: WatchlistEntry[];
+  dividends: DividendEntry[];
+}
+
 export interface User {
   id: string;
   username: string;
   passwordHash: string;
   displayName: string;
   createdAt: string;
+  email?: string;
+  profilePicture?: string; // base64 string
+  portfolio?: UserPortfolio;
 }
 
 export interface EquityBuy {
