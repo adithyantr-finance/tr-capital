@@ -4,7 +4,7 @@
   "trcapital_user_financeadmin_tr_funds": "[]",
   "trcapital_user_financeadmin.tr_watchlist": "[]",
   "trcapital_user_financeadmin_tr_sells": "[]",
-  "trcapital_user_financeadmin.tr_buys": "[]",
+  "trcapital_user_financeadmin.tr_buys": "[{\"transactionId\":\"TRC-EQ-20260621-1994\",\"date\":\"2026-06-21\",\"ticker\":\"INFY.NS\",\"stockName\":\"Infosys Limited\",\"industry\":\"Information Technology\",\"quantity\":10,\"avgBuyPrice\":1940,\"fees\":0,\"totalBuyValue\":19400,\"targetPrice\":2328,\"pctToTarget\":63.914803731737365,\"holdingDuration\":\"1 year\",\"opinion\":\"\",\"currentPrice\":1420.25,\"currentValue\":14202.5,\"currentPE\":0,\"contactNotes\":[],\"isPartialSold\":false,\"subsequentPurchases\":[]}]",
   "trcapital_user_financeadmin.tr_dividends": "[]",
   "trcapital_user_financeadmin_tr_alternatives": "[]",
   "trcapital_user_financeadmin_tr_dividends": "[]",
