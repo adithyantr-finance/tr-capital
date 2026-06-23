@@ -46,6 +46,18 @@ export const Dashboard: React.FC = () => {
 
   const activeHoldings = useMemo(() => getActiveHoldings(buys, sells), [buys, sells]);
 
+  // Count active manual price overrides in buys and subsequent purchases
+  const manualOverridesCount = useMemo(() => {
+    let count = 0;
+    buys.forEach(b => {
+      if (b.manualPriceOverride && b.manualPriceOverride > 0) count++;
+      (b.subsequentPurchases || []).forEach(sub => {
+        if (sub.manualPriceOverride && sub.manualPriceOverride > 0) count++;
+      });
+    });
+    return count;
+  }, [buys]);
+
   // --- Core Calculations ---
   
   // 1. Cash Balance
@@ -337,6 +349,16 @@ export const Dashboard: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Manual Price Override Alert */}
+      {manualOverridesCount > 0 && (
+        <div className="flex items-center gap-3 p-4 bg-danger/10 border border-danger/40 text-danger rounded select-none">
+          <AlertTriangle className="w-5 h-5 shrink-0" />
+          <div className="text-[13px] font-sans font-semibold">
+            {manualOverridesCount} position(s) are using manual price overrides. Live price updates are bypassed for these holdings.
+          </div>
+        </div>
+      )}
 
       {/* Cash Drag Trigger Warning Alert */}
       {cashDrag > 20 && (

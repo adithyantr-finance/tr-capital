@@ -7,6 +7,7 @@ export interface StockInfo {
   currentPrice: number;
   currentPE: number;
   isStale: boolean;
+  lotSize?: number;
 }
 
 // Simple fallback mock data for offline mode or CORS failures
@@ -57,7 +58,10 @@ export function useStockData() {
 
           const stockName = priceObj?.longName || priceObj?.shortName || ticker.split('.')[0];
           const industry = profileObj?.industry || 'Other';
-          const currentPrice = priceObj?.regularMarketPrice?.raw || priceObj?.regularMarketPrice || 0;
+          
+          const lotSize = priceObj?.lotSize ?? priceObj?.contractSize ?? result?.lotSize ?? result?.contractSize ?? 1;
+          const rawPrice = Number(priceObj?.regularMarketPrice?.raw || priceObj?.regularMarketPrice || 0);
+          const currentPrice = lotSize > 1 ? rawPrice / lotSize : rawPrice;
           const currentPE = detailObj?.trailingPE?.raw || detailObj?.trailingPE || detailObj?.forwardPE?.raw || 0;
 
           setLoading(false);
@@ -65,9 +69,10 @@ export function useStockData() {
             ticker,
             stockName,
             industry,
-            currentPrice: Number(currentPrice),
+            currentPrice,
             currentPE: Number(currentPE) || 0,
-            isStale: false
+            isStale: false,
+            lotSize
           };
         }
       } catch (err: any) {
@@ -90,11 +95,16 @@ export function useStockData() {
             const profileObj = result?.assetProfile;
             const detailObj = result?.summaryDetail;
             if (priceObj?.regularMarketPrice) {
+              const lotSize = priceObj?.lotSize ?? priceObj?.contractSize ?? result?.lotSize ?? result?.contractSize ?? 1;
+              const rawPrice = Number(priceObj?.regularMarketPrice?.raw || priceObj?.regularMarketPrice || 0);
+              const currentPrice = lotSize > 1 ? rawPrice / lotSize : rawPrice;
+
               return {
                 stockName: priceObj?.longName || priceObj?.shortName || sym.split('.')[0],
                 industry: profileObj?.industry || 'Other',
-                currentPrice: Number(priceObj?.regularMarketPrice?.raw || priceObj?.regularMarketPrice || 0),
-                currentPE: Number(detailObj?.trailingPE?.raw || detailObj?.trailingPE || detailObj?.forwardPE?.raw || 0)
+                currentPrice,
+                currentPE: Number(detailObj?.trailingPE?.raw || detailObj?.trailingPE || detailObj?.forwardPE?.raw || 0),
+                lotSize
               };
             }
           }
@@ -116,11 +126,16 @@ export function useStockData() {
           const data = resJson.contents ? JSON.parse(resJson.contents) : resJson;
           const result = data?.quoteResponse?.result?.[0];
           if (result && result.regularMarketPrice) {
+            const lotSize = result.lotSize ?? result.contractSize ?? 1;
+            const rawPrice = Number(result.regularMarketPrice);
+            const currentPrice = lotSize > 1 ? rawPrice / lotSize : rawPrice;
+
             return {
               stockName: result.longName || result.shortName || sym.split('.')[0],
               industry: 'Other',
-              currentPrice: Number(result.regularMarketPrice),
-              currentPE: Number(result.trailingPE || result.forwardPE || 0)
+              currentPrice,
+              currentPE: Number(result.trailingPE || result.forwardPE || 0),
+              lotSize
             };
           }
         }
@@ -147,7 +162,8 @@ export function useStockData() {
           industry: data.industry || 'Other',
           currentPrice: data.currentPrice || 0,
           currentPE: data.currentPE || 0,
-          isStale: false
+          isStale: false,
+          lotSize: data.lotSize
         };
       }
     }
@@ -163,7 +179,8 @@ export function useStockData() {
           industry: data.industry || 'Other',
           currentPrice: data.currentPrice || 0,
           currentPE: data.currentPE || 0,
-          isStale: false
+          isStale: false,
+          lotSize: data.lotSize
         };
       }
     }
@@ -179,7 +196,8 @@ export function useStockData() {
           industry: mock.industry || 'Unknown',
           currentPrice: mock.currentPrice || 100,
           currentPE: mock.currentPE || 0,
-          isStale: true
+          isStale: true,
+          lotSize: 1
         };
       }
 
@@ -194,7 +212,8 @@ export function useStockData() {
         industry: 'Conglomerate',
         currentPrice: randomPrice,
         currentPE: randomPE,
-        isStale: true
+        isStale: true,
+        lotSize: 1
       };
     } catch (err: any) {
       setLoading(false);

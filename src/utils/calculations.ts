@@ -54,6 +54,7 @@ export interface ActiveHolding {
   isPartialSold: boolean;
   subsequentPurchases: EquityBuy[];
   originalBuyId: string;
+  manualPriceOverride?: number | null;
 }
 
 export const getActiveHoldings = (buys: EquityBuy[], sells: EquitySell[]): ActiveHolding[] => {
@@ -66,15 +67,18 @@ export const getActiveHoldings = (buys: EquityBuy[], sells: EquitySell[]): Activ
     const remainingQty = buy.quantity - soldQty;
 
     if (remainingQty > 0) {
-      // Pro-rate the buy fees
       const proRatedFees = (remainingQty / buy.quantity) * buy.fees;
       const totalInvested = (remainingQty * buy.avgBuyPrice) + proRatedFees;
-      const currentValue = remainingQty * buy.currentPrice;
+      const effectivePrice = buy.manualPriceOverride && buy.manualPriceOverride > 0
+        ? buy.manualPriceOverride
+        : buy.currentPrice;
+
+      const currentValue = remainingQty * effectivePrice;
       const unrealizedPnL = currentValue - totalInvested;
       const unrealizedPnLPct = totalInvested > 0 ? (unrealizedPnL / totalInvested) * 100 : 0;
       
-      const pctToTarget = buy.currentPrice > 0 
-        ? ((buy.targetPrice - buy.currentPrice) / buy.currentPrice) * 100 
+      const pctToTarget = effectivePrice > 0 
+        ? ((buy.targetPrice - effectivePrice) / effectivePrice) * 100 
         : 0;
 
       holdingsMap[buy.transactionId] = {
@@ -96,7 +100,8 @@ export const getActiveHoldings = (buys: EquityBuy[], sells: EquitySell[]): Activ
         contactNotes: buy.contactNotes || [],
         isPartialSold: soldQty > 0,
         subsequentPurchases: buy.subsequentPurchases || [],
-        originalBuyId: buy.transactionId
+        originalBuyId: buy.transactionId,
+        manualPriceOverride: buy.manualPriceOverride
       };
     }
   });

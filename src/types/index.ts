@@ -39,6 +39,8 @@ export interface EquityBuy {
   currentPE: number;             // Live-fetched, summary PE
   contactNotes: string[];        // Array of PDF file base64 strings
   isPartialSold: boolean;
+  manualPriceOverride?: number | null;
+  lotSize?: number;
 }
 
 export interface EquitySell {

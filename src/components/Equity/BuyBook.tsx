@@ -20,11 +20,38 @@ import {
 } from 'lucide-react';
 
 export const BuyBook: React.FC = () => {
-  const { buys, deleteBuy } = usePortfolio();
+  const { buys, deleteBuy, updateBuy } = usePortfolio();
   const { showToast } = useToast();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedBuys, setExpandedBuys] = useState<Record<string, boolean>>({});
+  
+  const [editingOverrideId, setEditingOverrideId] = useState<string | null>(null);
+  const [overrideValue, setOverrideValue] = useState<string>('');
+
+  const handleSetOverride = (buyId: string, subId: string | null, val: number | null) => {
+    if (!subId) {
+      updateBuy(buyId, { manualPriceOverride: val });
+    } else {
+      const parent = buys.find(b => b.transactionId === buyId);
+      if (parent) {
+        const updatedSubs = (parent.subsequentPurchases || []).map(sub => {
+          if (sub.transactionId === subId) {
+            const currentPrice = sub.currentPrice || sub.avgBuyPrice;
+            const effectivePrice = val && val > 0 ? val : currentPrice;
+            return {
+              ...sub,
+              manualPriceOverride: val,
+              currentValue: sub.quantity * effectivePrice,
+              pctToTarget: effectivePrice > 0 ? ((sub.targetPrice - effectivePrice) / effectivePrice) * 100 : 0
+            };
+          }
+          return sub;
+        });
+        updateBuy(buyId, { subsequentPurchases: updatedSubs });
+      }
+    }
+  };
 
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>({ key: 'date', direction: 'desc' });
 
@@ -329,7 +356,84 @@ export const BuyBook: React.FC = () => {
                       <td className="py-3.5 px-3 text-right font-mono text-[12px]">{formatINR(buy.totalBuyValue, false)}</td>
 
                       {/* Live Price */}
-                      <td className="py-3.5 px-3 text-right font-mono text-[12px]">{formatINR(buy.currentPrice, false)}</td>
+                      <td className="py-3.5 px-3 text-right font-mono text-[12px] group/price">
+                        {editingOverrideId === buy.transactionId ? (
+                          <div className="flex items-center gap-1 justify-end">
+                            <input
+                              type="number"
+                              value={overrideValue}
+                              onChange={(e) => setOverrideValue(e.target.value)}
+                              className="w-20 px-1 py-0.5 bg-background border border-border rounded text-[11px] font-mono text-right text-cream focus:border-primary focus:outline-none"
+                              step="0.01"
+                              autoFocus
+                            />
+                            <button
+                              onClick={() => {
+                                const val = parseFloat(overrideValue);
+                                if (!isNaN(val) && val >= 0) {
+                                  handleSetOverride(buy.transactionId, null, val);
+                                  showToast(`Manual price override set to ₹${val} for ${buy.ticker}`);
+                                }
+                                setEditingOverrideId(null);
+                              }}
+                              className="p-0.5 text-success hover:bg-elevated rounded cursor-pointer"
+                              title="Save"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={() => setEditingOverrideId(null)}
+                              className="p-0.5 text-muted hover:bg-elevated rounded cursor-pointer"
+                              title="Cancel"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-end gap-0.5">
+                            <div className="flex items-center gap-1 justify-end">
+                              {buy.manualPriceOverride && buy.manualPriceOverride > 0 ? (
+                                <span className="text-secondary font-bold flex items-center gap-1">
+                                  {formatINR(buy.manualPriceOverride, false)}
+                                  <span className="text-[8px] bg-danger/25 text-danger border border-danger/30 px-1 py-0.2 rounded font-sans font-bold select-none tracking-wider">MANUAL</span>
+                                  <button
+                                    onClick={() => {
+                                      handleSetOverride(buy.transactionId, null, null);
+                                      showToast(`Cleared override for ${buy.ticker}, resumed live price`);
+                                    }}
+                                    className="text-[#505065] hover:text-cream cursor-pointer text-[10px] pl-0.5"
+                                    title="Clear manual override"
+                                  >
+                                    ✕
+                                  </button>
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1">
+                                  {formatINR(buy.currentPrice, false)}
+                                  <button
+                                    onClick={() => {
+                                      setEditingOverrideId(buy.transactionId);
+                                      setOverrideValue(String(buy.currentPrice));
+                                    }}
+                                    className="opacity-0 group-hover/price:opacity-100 text-[#505065] hover:text-cream cursor-pointer transition-opacity pl-0.5 text-[10px]"
+                                    title="Override price manually"
+                                  >
+                                    ✎
+                                  </button>
+                                </span>
+                              )}
+                            </div>
+                            {buy.currentPrice > 0 && buy.avgBuyPrice > 0 && (buy.currentPrice / buy.avgBuyPrice > 5 || buy.currentPrice / buy.avgBuyPrice < 0.2) && (
+                              <span 
+                                className="text-[8px] font-sans font-semibold text-danger bg-danger/10 border border-danger/25 px-1 py-0.2 rounded select-none animate-pulse mt-0.5"
+                                title={`Warning: Live price (₹${buy.currentPrice}) deviates by >400% from your purchase price (₹${buy.avgBuyPrice}). This could be due to a Yahoo Finance lot size or contract size error. Click the pencil icon to override manually.`}
+                              >
+                                ⚠ SUSPECT PRICE
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
 
                       {/* Current Value */}
                       <td className="py-3.5 px-3 text-right font-mono text-[12px]">{formatINR(buy.currentValue, false)}</td>
@@ -457,7 +561,84 @@ export const BuyBook: React.FC = () => {
                             <td className="py-2.5 px-3 text-right font-mono text-[12px]">{sub.quantity}</td>
                             <td className="py-2.5 px-3 text-right font-mono text-[12px]">{formatINR(sub.avgBuyPrice, false)}</td>
                             <td className="py-2.5 px-3 text-right font-mono text-[12px]">{formatINR(sub.totalBuyValue, false)}</td>
-                            <td className="py-2.5 px-3 text-right font-mono text-[12px]">{formatINR(sub.currentPrice, false)}</td>
+                            <td className="py-2.5 px-3 text-right font-mono text-[12px] group/subprice">
+                              {editingOverrideId === sub.transactionId ? (
+                                <div className="flex items-center gap-1 justify-end">
+                                  <input
+                                    type="number"
+                                    value={overrideValue}
+                                    onChange={(e) => setOverrideValue(e.target.value)}
+                                    className="w-16 px-1 py-0.5 bg-background border border-border rounded text-[11px] font-mono text-right text-cream focus:border-primary focus:outline-none"
+                                    step="0.01"
+                                    autoFocus
+                                  />
+                                  <button
+                                    onClick={() => {
+                                      const val = parseFloat(overrideValue);
+                                      if (!isNaN(val) && val >= 0) {
+                                        handleSetOverride(buy.transactionId, sub.transactionId, val);
+                                        showToast(`Manual price override set to ₹${val} for ${sub.ticker}`);
+                                      }
+                                      setEditingOverrideId(null);
+                                    }}
+                                    className="p-0.5 text-success hover:bg-elevated rounded cursor-pointer"
+                                    title="Save"
+                                  >
+                                    ✓
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingOverrideId(null)}
+                                    className="p-0.5 text-muted hover:bg-elevated rounded cursor-pointer"
+                                    title="Cancel"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col items-end gap-0.5">
+                                  <div className="flex items-center gap-1 justify-end">
+                                    {sub.manualPriceOverride && sub.manualPriceOverride > 0 ? (
+                                      <span className="text-secondary font-bold flex items-center gap-1">
+                                        {formatINR(sub.manualPriceOverride, false)}
+                                        <span className="text-[8px] bg-danger/25 text-danger border border-danger/30 px-1 py-0.2 rounded font-sans font-bold select-none tracking-wider">MANUAL</span>
+                                        <button
+                                          onClick={() => {
+                                            handleSetOverride(buy.transactionId, sub.transactionId, null);
+                                            showToast(`Cleared override for ${sub.ticker}, resumed live price`);
+                                          }}
+                                          className="text-[#505065] hover:text-cream cursor-pointer text-[10px] pl-0.5"
+                                          title="Clear manual override"
+                                        >
+                                          ✕
+                                        </button>
+                                      </span>
+                                    ) : (
+                                      <span className="flex items-center gap-1">
+                                        {formatINR(sub.currentPrice, false)}
+                                        <button
+                                          onClick={() => {
+                                            setEditingOverrideId(sub.transactionId);
+                                            setOverrideValue(String(sub.currentPrice));
+                                          }}
+                                          className="opacity-0 group-hover/subprice:opacity-100 text-[#505065] hover:text-cream cursor-pointer transition-opacity pl-0.5 text-[10px]"
+                                          title="Override price manually"
+                                        >
+                                          ✎
+                                        </button>
+                                      </span>
+                                    )}
+                                  </div>
+                                  {sub.currentPrice > 0 && sub.avgBuyPrice > 0 && (sub.currentPrice / sub.avgBuyPrice > 5 || sub.currentPrice / sub.avgBuyPrice < 0.2) && (
+                                    <span 
+                                      className="text-[8px] font-sans font-semibold text-danger bg-danger/10 border border-danger/25 px-1 py-0.2 rounded select-none animate-pulse mt-0.5"
+                                      title={`Warning: Live price (₹${sub.currentPrice}) deviates by >400% from your purchase price (₹${sub.avgBuyPrice}). Click the pencil icon to override manually.`}
+                                    >
+                                      ⚠ SUSPECT PRICE
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </td>
                             <td className="py-2.5 px-3 text-right font-mono text-[12px]">{formatINR(sub.currentValue, false)}</td>
                             <td className={`py-2.5 px-3 text-right font-mono text-[12px]
                               ${subPnL >= 0 ? 'text-success/80' : 'text-danger/80'}`}

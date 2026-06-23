@@ -90,7 +90,8 @@ function portfolioReducer(state: PortfolioState, action: PortfolioAction): Portf
           const totalCostExclFees = (b.quantity * b.avgBuyPrice) + (sub.quantity * sub.avgBuyPrice);
           const newParentAvgPrice = newParentQty > 0 ? (totalCostExclFees / newParentQty) : b.avgBuyPrice;
           const newParentTotalBuyValue = (newParentQty * newParentAvgPrice) + newParentFees;
-          const newParentCurrentValue = newParentQty * b.currentPrice;
+          const effectivePrice = b.manualPriceOverride && b.manualPriceOverride > 0 ? b.manualPriceOverride : b.currentPrice;
+          const newParentCurrentValue = newParentQty * effectivePrice;
 
           return {
             ...b,
@@ -504,16 +505,24 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           const subName = subUpdate ? subUpdate.stockName : sub.stockName;
           const subIndustry = subUpdate ? subUpdate.industry : sub.industry;
           
+          const subEffective = sub.manualPriceOverride && sub.manualPriceOverride > 0
+            ? sub.manualPriceOverride
+            : subPrice;
+
           return {
             ...sub,
             currentPrice: subPrice,
             currentPE: subPE,
             stockName: subName,
             industry: subIndustry,
-            currentValue: sub.quantity * subPrice,
-            pctToTarget: subPrice > 0 ? ((sub.targetPrice - subPrice) / subPrice) * 100 : 0
+            currentValue: sub.quantity * subEffective,
+            pctToTarget: subEffective > 0 ? ((sub.targetPrice - subEffective) / subEffective) * 100 : 0
           };
         });
+
+        const effectivePrice = buy.manualPriceOverride && buy.manualPriceOverride > 0
+          ? buy.manualPriceOverride
+          : currentPrice;
 
         return {
           ...buy,
@@ -521,8 +530,8 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           currentPE,
           stockName,
           industry,
-          currentValue: buy.quantity * currentPrice,
-          pctToTarget: currentPrice > 0 ? ((buy.targetPrice - currentPrice) / currentPrice) * 100 : 0,
+          currentValue: buy.quantity * effectivePrice,
+          pctToTarget: effectivePrice > 0 ? ((buy.targetPrice - effectivePrice) / effectivePrice) * 100 : 0,
           subsequentPurchases: updatedSubsequent
         };
       });
@@ -617,8 +626,13 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const addBuy = (buy: Omit<EquityBuy, 'totalBuyValue' | 'currentValue' | 'pctToTarget' | 'currentPE' | 'isPartialSold'>) => {
     const totalBuyValue = (buy.quantity * buy.avgBuyPrice) + buy.fees;
     const currentPrice = buy.currentPrice || buy.avgBuyPrice;
-    const currentValue = buy.quantity * currentPrice;
-    const pctToTarget = currentPrice > 0 ? ((buy.targetPrice - currentPrice) / currentPrice) * 100 : 0;
+    
+    const effectivePrice = buy.manualPriceOverride && buy.manualPriceOverride > 0
+      ? buy.manualPriceOverride
+      : currentPrice;
+
+    const currentValue = buy.quantity * effectivePrice;
+    const pctToTarget = effectivePrice > 0 ? ((buy.targetPrice - effectivePrice) / effectivePrice) * 100 : 0;
 
     const newBuy: EquityBuy = {
       ...buy,
@@ -645,8 +659,13 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const addSubsequentPurchase = (parentBuyId: string, purchase: Omit<EquityBuy, 'totalBuyValue' | 'currentValue' | 'pctToTarget' | 'currentPE' | 'isPartialSold'>) => {
     const totalBuyValue = (purchase.quantity * purchase.avgBuyPrice) + purchase.fees;
     const currentPrice = purchase.currentPrice || purchase.avgBuyPrice;
-    const currentValue = purchase.quantity * currentPrice;
-    const pctToTarget = currentPrice > 0 ? ((purchase.targetPrice - currentPrice) / currentPrice) * 100 : 0;
+    
+    const effectivePrice = purchase.manualPriceOverride && purchase.manualPriceOverride > 0
+      ? purchase.manualPriceOverride
+      : currentPrice;
+
+    const currentValue = purchase.quantity * effectivePrice;
+    const pctToTarget = effectivePrice > 0 ? ((purchase.targetPrice - effectivePrice) / effectivePrice) * 100 : 0;
 
     const newSub: EquityBuy = {
       ...purchase,
