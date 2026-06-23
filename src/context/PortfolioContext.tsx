@@ -758,7 +758,11 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const addToWatchlist = async (tickerInput: string): Promise<boolean> => {
     let ticker = tickerInput.trim().toUpperCase();
     if (!ticker.endsWith('.NS') && !ticker.endsWith('.BO')) {
-      ticker = `${ticker}.NS`;
+      if (/^\d{6}$/.test(ticker)) {
+        ticker = `${ticker}.BO`;
+      } else {
+        ticker = `${ticker}.NS`;
+      }
     }
 
     if (state.watchlist.some(w => w.ticker === ticker)) return false;

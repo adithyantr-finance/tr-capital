@@ -34,7 +34,12 @@ export function useStockData() {
     // Auto-formatting ticker
     let ticker = tickerInput.trim().toUpperCase();
     if (!ticker.endsWith('.NS') && !ticker.endsWith('.BO')) {
-      ticker = `${ticker}.NS`; // default to NSE
+      // If it is a 6-digit numeric code (BSE code), append .BO
+      if (/^\d{6}$/.test(ticker)) {
+        ticker = `${ticker}.BO`;
+      } else {
+        ticker = `${ticker}.NS`; // default to NSE
+      }
     }
 
     const electronApi = (window as any).electron;
@@ -64,46 +69,106 @@ export function useStockData() {
             currentPE: Number(currentPE) || 0,
             isStale: false
           };
-        } else {
-          console.warn('IPC Stock fetch returned failure, checking mock database', summaryRes.error);
         }
       } catch (err: any) {
-        console.error('IPC Stock fetch crashed, checking mock database', err);
+        console.warn('IPC Stock fetch crashed, checking browser fallbacks', err);
       }
     }
 
-    // 2. Direct browser fetch with CORS proxy
-    try {
-      const response = await fetch(`https://corsproxy.io/?` + encodeURIComponent(`https://query1.finance.yahoo.com/v11/finance/quoteSummary/${ticker}?modules=summaryDetail,assetProfile,price`));
-      if (response.ok) {
-        const summaryRes = await response.json();
-        const result = summaryRes?.quoteSummary?.result?.[0];
-        if (result) {
-          const priceObj = result?.price;
-          const profileObj = result?.assetProfile;
-          const detailObj = result?.summaryDetail;
-
-          const stockName = priceObj?.longName || priceObj?.shortName || ticker.split('.')[0];
-          const industry = profileObj?.industry || 'Other';
-          const currentPrice = priceObj?.regularMarketPrice?.raw || priceObj?.regularMarketPrice || 0;
-          const currentPE = detailObj?.trailingPE?.raw || detailObj?.trailingPE || detailObj?.forwardPE?.raw || 0;
-
-          setLoading(false);
-          return {
-            ticker,
-            stockName,
-            industry,
-            currentPrice: Number(currentPrice),
-            currentPE: Number(currentPE) || 0,
-            isStale: false
-          };
+    // Helper to fetch quoteSummary (detailed) via proxy
+    const tryFetchSummary = async (sym: string, proxyFn: (url: string) => string): Promise<Partial<StockInfo> | null> => {
+      try {
+        const targetUrl = `https://query1.finance.yahoo.com/v11/finance/quoteSummary/${sym}?modules=summaryDetail,assetProfile,price`;
+        const proxiedUrl = proxyFn(targetUrl);
+        const response = await fetch(proxiedUrl);
+        if (response.ok) {
+          const resJson = await response.json();
+          const data = resJson.contents ? JSON.parse(resJson.contents) : resJson;
+          const result = data?.quoteSummary?.result?.[0];
+          if (result) {
+            const priceObj = result?.price;
+            const profileObj = result?.assetProfile;
+            const detailObj = result?.summaryDetail;
+            if (priceObj?.regularMarketPrice) {
+              return {
+                stockName: priceObj?.longName || priceObj?.shortName || sym.split('.')[0],
+                industry: profileObj?.industry || 'Other',
+                currentPrice: Number(priceObj?.regularMarketPrice?.raw || priceObj?.regularMarketPrice || 0),
+                currentPE: Number(detailObj?.trailingPE?.raw || detailObj?.trailingPE || detailObj?.forwardPE?.raw || 0)
+              };
+            }
+          }
         }
+      } catch (err) {
+        console.warn(`Summary fetch failed for ${sym} using proxy`, err);
       }
-    } catch (err) {
-      console.warn('Browser direct stock fetch with CORS proxy failed, checking mock database', err);
+      return null;
+    };
+
+    // Helper to fetch quote (simpler) via proxy
+    const tryFetchQuote = async (sym: string, proxyFn: (url: string) => string): Promise<Partial<StockInfo> | null> => {
+      try {
+        const targetUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${sym}`;
+        const proxiedUrl = proxyFn(targetUrl);
+        const response = await fetch(proxiedUrl);
+        if (response.ok) {
+          const resJson = await response.json();
+          const data = resJson.contents ? JSON.parse(resJson.contents) : resJson;
+          const result = data?.quoteResponse?.result?.[0];
+          if (result && result.regularMarketPrice) {
+            return {
+              stockName: result.longName || result.shortName || sym.split('.')[0],
+              industry: 'Other',
+              currentPrice: Number(result.regularMarketPrice),
+              currentPE: Number(result.trailingPE || result.forwardPE || 0)
+            };
+          }
+        }
+      } catch (err) {
+        console.warn(`Quote fetch failed for ${sym} using proxy`, err);
+      }
+      return null;
+    };
+
+    const proxies = [
+      (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+      (url: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
+    ];
+
+    // 2. Direct browser fetch cascade
+    // Try summary endpoint first
+    for (const proxyFn of proxies) {
+      const data = await tryFetchSummary(ticker, proxyFn);
+      if (data) {
+        setLoading(false);
+        return {
+          ticker,
+          stockName: data.stockName || ticker.split('.')[0],
+          industry: data.industry || 'Other',
+          currentPrice: data.currentPrice || 0,
+          currentPE: data.currentPE || 0,
+          isStale: false
+        };
+      }
     }
 
-    // 3. Fallback to mock data
+    // Try quote endpoint next
+    for (const proxyFn of proxies) {
+      const data = await tryFetchQuote(ticker, proxyFn);
+      if (data) {
+        setLoading(false);
+        return {
+          ticker,
+          stockName: data.stockName || ticker.split('.')[0],
+          industry: data.industry || 'Other',
+          currentPrice: data.currentPrice || 0,
+          currentPE: data.currentPE || 0,
+          isStale: false
+        };
+      }
+    }
+
+    // 3. Fallback to mock database (Offline/failure)
     try {
       const mock = MOCK_STOCK_DATA[ticker];
       if (mock) {

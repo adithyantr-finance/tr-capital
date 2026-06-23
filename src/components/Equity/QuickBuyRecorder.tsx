@@ -58,6 +58,9 @@ export const QuickBuyRecorder: React.FC<QuickBuyRecorderProps> = ({ onClose }) =
     const term = tickerName.trim().toUpperCase();
     if (!term) return '';
     if (term.endsWith('.NS') || term.endsWith('.BO')) return term;
+    if (/^\d{6}$/.test(term)) {
+      return `${term}.BO`;
+    }
     return `${term}${suffix}`;
   }, [tickerName, suffix]);
 
@@ -325,7 +328,13 @@ export const QuickBuyRecorder: React.FC<QuickBuyRecorderProps> = ({ onClose }) =
                 ref={tickerInputRef}
                 type="text"
                 value={tickerName}
-                onChange={(e) => setTickerName(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setTickerName(val);
+                  if (/^\d{6}$/.test(val.trim())) {
+                    setSuffix('.BO');
+                  }
+                }}
                 onBlur={handleTickerBlur}
                 className="flex-1 px-3 py-2 bg-background border border-border rounded text-cream text-[13px] uppercase focus:border-primary transition-colors placeholder-hint"
                 placeholder="e.g. RELIANCE"
